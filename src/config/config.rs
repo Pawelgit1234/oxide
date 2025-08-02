@@ -42,10 +42,33 @@ pub struct ResponseConfig {
 }
 
 impl Config {
+    fn check_route_config(&self) -> Result<(), Box<dyn std::error::Error>> {
+        for (i, route) in self.routes.iter().enumerate() {
+            let present_count = [
+                route.directory.is_some(),
+                route.index.is_some(),
+                route.proxy_pass.is_some(),
+            ]
+            .iter()
+            .filter(|&&v| v)
+            .count();
+
+            if present_count != 1 {
+                return Err(format!(
+                    "Route #{} must have exactly one of 'directory', 'index', or 'proxy_pass'",
+                    i + 1
+                )
+                .into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let path_ref: &Path = path.as_ref();
         let contents = fs::read_to_string(path_ref)?;
-        let config = serde_yaml::from_str(&contents)?;
+        let config: Self = serde_yaml::from_str(&contents)?;
+        config.check_route_config()?;
         Ok(config)
     }
 }
