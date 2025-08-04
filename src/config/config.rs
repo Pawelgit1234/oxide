@@ -25,14 +25,15 @@ pub struct TlsConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct RouteConfig{
+    pub path: String,
+
     pub directory: Option<String>,
     pub index: Option<String>,
     pub proxy_pass: Option<String>,
+    pub response: Option<ResponseConfig>,
 
     pub timeout_ms: Option<u64>,
     pub gzip: Option<bool>,
-
-    pub response: Option<ResponseConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +49,7 @@ impl Config {
                 route.directory.is_some(),
                 route.index.is_some(),
                 route.proxy_pass.is_some(),
+                route.response.is_some(),
             ]
             .iter()
             .filter(|&&v| v)
@@ -55,12 +57,21 @@ impl Config {
 
             if present_count != 1 {
                 return Err(format!(
-                    "Route #{} must have exactly one of 'directory', 'index', or 'proxy_pass'",
+                    "Route #{} must have exactly one of 'directory', 'index', 'proxy_pass' or 'response'",
+                    i + 1
+                )
+                .into());
+            }
+            
+            if route.gzip.is_some() && route.proxy_pass.is_some() {
+                return Err(format!(
+                    "Route #{}: gzip compression cannot be enabled for proxy_pass routes",
                     i + 1
                 )
                 .into());
             }
         }
+
         Ok(())
     }
 
