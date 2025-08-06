@@ -14,13 +14,13 @@ async fn main() {
     match cli.command {
         Command::Run { file, daemon } => {
             let config = Config::from_file(file).unwrap();
+
             if daemon {
                 // TODO: implement daemon mode
                 eprintln!("Daemon mode not implemented yet");
             } else {
-                if let Err(e) = Server::run(config).await {
-                    eprintln!("Server error: {}", e);
-                }
+                let server = Server::new(config).await.unwrap();
+                let _ = server.run().await;
             }
         }
 

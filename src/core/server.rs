@@ -1,23 +1,33 @@
 use std::collections::HashMap;
 
-use crate::http::parse_request;
+use crate::http::{generate_routes, parse_request};
 use crate::config::Config;
-use crate::http::RouteType;
+use crate::http::Route;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+#[derive(Debug)]
 pub struct Server {
-    routing: HashMap<String, RouteType>, // path: body
+    listener: TcpListener,
+    routes: HashMap<String, Route>, // path -> response
 }
 
 impl Server {
-    async fn handle_connction(stream: TcpStream, method: String, path: String) {
-        
+    pub async fn new(config: Config) -> anyhow::Result<Self> {
+        let addr = format!("{}:{}", config.server.address, config.server.port);
+        let listener = TcpListener::bind(&addr).await?;
+        let routes = generate_routes(&config.routes)?;
+
+        Ok(Self {
+            listener,
+            routes,
+        })
     }
 
-    async fn accept_connections(listener: TcpListener) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         loop {
-            let (mut stream, addr) = listener.accept().await?;
+            let (mut stream, _) = self.listener.accept().await?;
+            let routes = self.routes.clone();
 
             tokio::spawn(async move {
                 let mut buf = [0u8; 4096];
@@ -26,7 +36,7 @@ impl Server {
                     Ok(n) => {
                         match parse_request(&buf[..n]) {
                             Ok((method, path)) => {
-                                Self::handle_connction(stream, method, path);
+                                Self::handle_connection(stream, method, path, routes).await;
                             }
                             Err(e) => eprintln!("Parse error: {e}"),
                         }
@@ -37,9 +47,19 @@ impl Server {
         }
     }
 
-    pub async fn run(config: Config) -> anyhow::Result<()> {
-        let addr = format!("{}:{}", config.server.address, config.server.port);
-        let listener = TcpListener::bind(&addr).await?;
-        Self::accept_connections(listener).await
+    async fn handle_connection(
+        mut stream: TcpStream,
+        method: String,
+        path: String,
+        routes: HashMap<String, Route>,
+    ) {
+        // пока что просто проверим — есть ли путь
+        if let Some(route) = routes.get(&path) {
+            let response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+            let _ = stream.write_all(response).await;
+        } else {
+            let response = b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\n\r\nNot Found";
+            let _ = stream.write_all(response).await;
+        }
     }
 }
