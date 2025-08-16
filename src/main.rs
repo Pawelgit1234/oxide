@@ -8,8 +8,17 @@ use config::Cli;
 use clap::Parser;
 use core::Server;
 
+use tracing_subscriber::FmtSubscriber;
+
 #[tokio::main]
 async fn main() {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to set subscriber");
+
     let cli = Cli::parse();
     match cli.command {
         Command::Run { file, daemon } => {
@@ -19,7 +28,7 @@ async fn main() {
                 // TODO: implement daemon mode
                 eprintln!("Daemon mode not implemented yet");
             } else {
-                let server = Server::new(config).await.unwrap();
+                let server = Server::new(&config).await.unwrap();
                 let _ = server.run().await;
             }
         }
